@@ -8,7 +8,7 @@ use DBI ();
 use Carp qw(croak cluck confess);
 
 use vars qw($VERSION @ISA);
-$VERSION = sprintf('%d.%02d', q$Revision: 1.2 $ =~ /(\d+)/g);
+$VERSION = sprintf('%d.%02d', q$Revision: 1.4 $ =~ /(\d+)/g);
 
 sub new {
 	ref(my $class = shift) && croak 'Class name required';
@@ -50,7 +50,7 @@ sub search_database {
 sub get_strip_from_database {
 	my $self = shift;
 
-	my $strip_id = shift;
+	my $strip_id = shift || 'undef';
 	croak "Malformed strip_id: '$strip_id'" unless _is_valid_strip_id($strip_id);
 
 	my $dbh = $self->_dbh();
@@ -145,7 +145,8 @@ sub _dbh {
 }
 
 sub _is_valid_strip_id {
-	return $_[0] =~ /^[0-9]{10,14}$/;
+	my $strip_name = shift || '';
+	return $strip_name =~ /^[0-9]{10,14}$/;
 }
 
 sub DESTROY {
@@ -218,7 +219,7 @@ WWW::Dilbert - Dilbert of the day comic strip archive and retieval module
 
 =head1 VERSION
 
-$Version$
+$VERSON
 
 =head1 SYNOPSYS
 
@@ -242,7 +243,87 @@ $Version$
 
 =head1 DESCRIPTION
 
-=head1 SQL Schema
+This module will download the latest Dilbert of the Day cartoon strip
+from the Dilbert website and return an object which can be either
+stored in a database or output to a browser, disk or whatever. It
+allows importing of Dilbert strips from disk or alternate URLs, and
+has a random strip interface to return strips from the database.
+
+=head1 METHODS
+
+=head2 WWW::Dilbert Object Methods
+
+Strip retrieval object.
+
+=over 4
+
+=item new()
+
+Create a new WWW::Dilbert strip retrieval object. Accepts the following key-value pairs:
+
+ dbi_dns => 'DBI:mysql:database:hostname',
+ dbi_user => 'username',
+ dbi_pass => 'password'
+
+=item get_todays_strip_from_website()
+
+Returns a strip object containing todays Dilbert of the Day cartoon strip.
+
+=item get_strip_from_website($strip_id)
+
+Returns a strip object containing a specific Dilbert cartoon strip as downloaded from the Dilbert website.
+
+=item get_strip_from_filename($filename)
+
+Returns a strip object containing a specific Dilbert cartoon strip from a Dilbert comic stip file on disk.
+
+=item get_strip_from_database($strip_id)
+
+=item get_random_strip_from_database()
+
+=back
+
+=head2 WWW::Dilbert::Strip Object Methods
+
+Strip object returned by WWW::Dilbert get methods.
+
+=over 4
+
+=item insert_into_database()
+
+Inserts the strip in to a database via the DBI database defined by the parent WWW::Dilbert object.
+
+=item width()
+
+Returns the width of the comic strip image.
+
+=item height()
+
+Returns the height of the comic strip image.
+
+=item file_ext
+
+Returns the file extension for the comic strip image format.
+
+=item file_media_type
+
+Returns the MIME type for the comic strip image format.
+
+=item bytes()
+
+Returns the total number of bytes of the comic strip image.
+
+=item strip_blob()
+
+Returns the binary image data of the comic strip image.
+
+=item strip_id()
+
+Returns the comic strip id.
+
+=back 
+
+=head1 SQL SCHEMA
 
  CREATE TABLE dilbert_character (
  	id int unsigned not null primary key auto_increment,
@@ -273,6 +354,15 @@ $Version$
 
 Dev::Bollocks
 
+=head1 TODO
+
+Complete the database search facility, and add retrieval of strips from the
+last 30 day online archive.
+
+=head1 BUGS
+
+Probably.
+
 =head1 LICENSE
 
 This program is free software; you can redistribute it and/or
@@ -298,5 +388,6 @@ Copyright (C) 2004 Nicola Worthington.
 http://www.nicolaworthington.com
 
 =cut
+
 
 
