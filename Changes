@@ -1,3 +1,6 @@
+1.07
+	- Added write_file() patch from David Dick
+	  <david_dick@iprimus.com.au>
 1.06
 	- Fixed some unit test problems
 	- Slightly improved error handling

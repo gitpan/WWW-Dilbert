@@ -2,6 +2,7 @@ package WWW::Dilbert;
 
 use strict;
 use warnings;
+use FileHandle ();
 use Image::Info ();
 use LWP::Simple ();
 use DBI ();
@@ -9,7 +10,7 @@ use WWW::Mechanize ();
 use Carp qw(croak cluck confess);
 
 use vars qw($VERSION @ISA);
-$VERSION = sprintf('%d.%02d', q$Revision: 1.6 $ =~ /(\d+)/g);
+$VERSION = sprintf('%d.%02d', q$Revision: 1.7 $ =~ /(\d+)/g);
 
 sub new {
 	ref(my $class = shift) && croak 'Class name required';
@@ -310,6 +311,22 @@ sub insert_into_database {
 	return $self->{strip_id};
 }
 
+sub write_to_file {
+	my $self = shift;
+	my $file_name = shift;
+	$file_name ||= $self->{strip_id} . '.' . $self->{image_info}->{file_ext};
+	my $file_handle = new FileHandle("> $file_name");
+	unless ($file_handle) {
+		die("Failed to open '$file_name' for writing:$!\n");
+	}
+	unless ($file_handle->print($self->{strip_blob})) {
+		die("Failed to write to '$file_name':$!\n");
+	}
+	unless ($file_handle->close()) {
+		die("Failed to close '$file_name':$!\n");
+	}
+}
+
 1;
 
 
@@ -480,6 +497,11 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+
+=head1 CREDITS
+
+Thanks go to David Dick <david_dick@iprimus.com.au> for the write_file() patch
+which he submitted on 22nd September 2004.
 
 =head1 AUTHOR
 
