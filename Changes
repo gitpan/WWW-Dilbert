@@ -1,0 +1,10 @@
+1.06
+	- Fixed some unit test problems
+	- Slightly improved error handling
+1.05
+	- Added members.comic.com support to download Dilbert comics
+	  all the way back to 16th April 1989. (Still to be completed)
+	- Fixed the MANIFEST to add some missing files which failed
+	  the unit tests
+	- Added some additional information to dilbert.sql for
+	  future expansion

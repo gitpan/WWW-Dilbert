@@ -5,10 +5,11 @@ use warnings;
 use Image::Info ();
 use LWP::Simple ();
 use DBI ();
+use WWW::Mechanize ();
 use Carp qw(croak cluck confess);
 
 use vars qw($VERSION @ISA);
-$VERSION = sprintf('%d.%02d', q$Revision: 1.4 $ =~ /(\d+)/g);
+$VERSION = sprintf('%d.%02d', q$Revision: 1.6 $ =~ /(\d+)/g);
 
 sub new {
 	ref(my $class = shift) && croak 'Class name required';
@@ -21,6 +22,14 @@ sub new {
                         croak "Unrecognised paramater '$k' passed to module $class";
                 }
         }
+
+	#$self->{public_host} ||= 'http://www.dilbert.com';
+	#$self->{members_host} ||= 'https://members.comics.com';
+	#$self->{default_ext} ||= 'gif';
+
+	$self->{public_host} ||= 'http://www.comics.com/comics/dilbert';
+	$self->{members_host} ||= 'http://members.comics.com';
+	$self->{default_ext} ||= 'jpg';
 
         bless($self,$class);
         return $self;
@@ -102,40 +111,127 @@ sub get_strip_from_filename {
 
 sub get_todays_strip_from_website {
 	my $self = shift;
-	my $strip = $self->get_strip_from_website(_get_todays_strip_url());
+	my $strip = $self->get_strip_from_website($self->_get_todays_strip_url());
 	return $strip;
 }
 
 sub get_strip_from_website {
 	my $self = shift;
-	my $strip_url = shift;
-	unless ($strip_url =~ /^http/i) {
-		$strip_url = "http://www.dilbert.com/comics/dilbert/archive/images/dilbert$strip_url.gif";
+	my $param;
+	if (@_ > 1) {
+		$param = { @_ };
+	} else {
+		$param->{strip_url} = shift || undef;
 	}
-	my $strip_blob = LWP::Simple::get($strip_url);
-	my $strip = WWW::Dilbert::Strip->_new(
+	unless ($param->{strip_url} || ($param->{email} && $param->{password} && $param->{date}) ) {
+		return undef;
+	}
+        while (my ($k,$v) = each %{$param}) {
+                unless (grep(/^$k$/i, qw(strip_url email password public members date))) {
+                        croak "Unrecognised paramater '$k'";
+                }
+        }
+	if (exists $param->{strip_url} && $param->{strip_url} !~ /^http/i) {
+		$param->{strip_url} = sprintf('%s/comics/dilbert/archive/images/dilbert%s.%s',
+					$self->{public_host}, $param->{strip_url}, $self->{default_ext});
+	}
+
+	my $strip_blob = undef;
+	if ($param->{email} && $param->{password} && $param->{date}) {
+		my $mech = WWW::Mechanize->new(
+					quiet => 1,
+					autocheck => 1,
+					agent => 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)'
+				);
+		$mech->quiet(1);
+		$mech->agent_alias('Windows IE 6');
+		$mech->redirect_ok();
+
+		$mech->get(sprintf('%s/members/registration/showLogin.do',$self->{members_host}));
+		my $html = $mech->content;
+		$html =~ s|</form>|<input type="text" name="MailAction" value="SIGNIN"></form>|isg;
+		$mech->update_html($html);
+		# $self->_debug_content($mech);
+
+		$mech->form_name('userForm');
+		$mech->field('email', $param->{email});
+		$mech->field('password', $param->{password});
+		$mech->field('MailAction', 'SIGNIN');
+		$mech->click('sign in',1,1); # "sign in=SIGNIN"
+		$self->_debug_content($mech);
+
+		$mech->follow_link(text_regex => qr/click here to reload/i);
+		$self->_debug_content($mech);
+
+		sleep 5;
+		my $target_source = sprintf('%s/members/archive/viewStrip.do?date=%s&comicId=107&comic=dilbert', $self->{members_host}, $param->{date});
+		warn "\n\n\$target_source = '$target_source'\n\n";
+		$html = $mech->content;
+		$html =~ s|</form>|<a href="$target_source">Previous Day</a>></form>|isg;
+		$mech->update_html($html);
+		$mech->follow_link(url_regex => qr/viewStrip.do\?date=/i);
+		$self->_debug_content($mech);
+
+		($param->{strip_url}) = $mech->content =~ m!(?:
+								(/members/extra/archiveViewer\?stripId=[0-9]{4,})
+								|
+								((?:(?:/comics)?/dilbert)?/archive/images/dilbert[0-9]{10,14}\.$self->{default_ext})
+							)!isx;
+		if ($param->{strip_url}) {		
+			$param->{strip_url} = sprintf('%s%s', ($param->{strip_url} =~ /archiveViewer/i ? $self->{members_host} : $self->{public_host}), $param->{strip_url});
+			warn "\n\n\$param->{strip_url} = $param->{strip_url}\n\n";
+			$strip_blob = $mech->follow_link(url => $param->{strip_url});
+		}
+		$mech->get(sprintf('%s/members/registration/logout.do',$self->{members_host}));
+	}
+
+	$self->{strip_url} = $param->{strip_url};
+	if ($param->{strip_url}) {
+		$strip_blob ||= LWP::Simple::get($param->{strip_url});
+		my $strip = WWW::Dilbert::Strip->_new(
 					dilbert => $self,
 					strip_blob => $strip_blob,
-					strip_id => _filename2strip_id($strip_url)
+					strip_id => _filename2strip_id($param->{strip_url})
 				);
-	return $strip;
+		return $strip;
+	}
+
+	return undef;
+}
+
+sub _debug_content {
+	my $self = shift;
+	my $mech = shift;
+	my $content = $mech->content;
+	$content =~ s!.*?(</SELECT>|<\!--\s*CONTENT\s*INFORMATION\s*-->)!!isg;
+	$content =~ s!<\!--\s*FOOTER\s*INFORMATION\s*-->.*!!isg;
+	$content =~ s!\n\s*\n!\n!isg;
+	warn "\n",'='x5,$mech->title,': ',$mech->uri,'='x10,"\n";
+	warn $content;
+	warn "\n",'='x60,"\n\n\n";
 }
 
 sub _filename2strip_id {
-	my ($strip_id) = $_[0] =~ /dilbert([0-9]{10,14})\./i;
+	my $str = shift || undef;
+	my $strip_id = undef;
+	if ($str =~ /(?:stripId=([0-9]{4,})|dilbert([0-9]{8,14}))\./i) {
+		$strip_id = $1 || $2 || undef;
+	}
 	return $strip_id;
 }
 
 sub _get_todays_strip_url {
-	my $html = LWP::Simple::get('http://www.dilbert.com');
-	(my $strip_uri) = $html =~ m|SRC="(?:http.?://.+?)?(/comics/dilbert/archive/images/dilbert[0-9]{10,14}\.gif)"|i;
-	return "http://www.dilbert.com$strip_uri";
+	my $self = shift;
+	my $html = LWP::Simple::get($self->{public_host});
+	(my $strip_uri) = $html =~ m|SRC="(/comics/dilbert/archive/images/dilbert[0-9]{8,14}\.(gif\|jpe?g\|png))"|i;
+	return undef unless $strip_uri;
+	return sprintf('%s%s',$self->{public_host},$strip_uri);
 }
 
 sub _connect_to_database {
 	my $self = shift;
 	croak('You have not specified dbi_dsn, dbi_user or dbi_pass; unable to perform database action') unless ($self->{dbi_dsn} && $self->{dbi_user} && $self->{dbi_pass});
-	$self->{dbh} = DBI->connect($self->{dbi_dsn}, $self->{dbi_user}, $self->{dbi_pass});
+	$self->{dbh} = DBI->connect($self->{dbi_dsn}, $self->{dbi_user}, $self->{dbi_pass}, { RaiseError => 1, AutoCommit => 1});
 }
 
 sub _dbh {
@@ -181,8 +277,14 @@ sub _new {
 
         my $self = { @_ };
 	if (exists $self->{strip_blob}) {
-		$self->{bytes} = length($self->{strip_blob});
-		$self->{image_info} = Image::Info::image_info(\$self->{strip_blob});
+		$self->{bytes} = length($self->{strip_blob}||0);
+		my $info = Image::Info::image_info(\$self->{strip_blob});
+		if (my $error = $info->{error}) {
+			$self->{error} = $error;
+			$self->{image_info}->{error} = $error;
+		} else {
+			$self->{image_info} = $info;
+		}
 	}
         bless($self, $class);
 

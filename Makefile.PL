@@ -10,6 +10,7 @@ WriteMakefile(
    PREREQ_PM     => { 'DBI'         => 0,
                       'Image::Info' => 0,
                       'LWP::Simple' => 0,
+                      'WWW::Mechanize' => 0,
                       'Carp'        => 0,
                      },
 );
