@@ -4,13 +4,13 @@ use strict;
 use warnings;
 use FileHandle ();
 use Image::Info ();
-use LWP::Simple ();
+use LWP::UserAgent ();
 use DBI ();
 use WWW::Mechanize ();
 use Carp qw(croak cluck confess);
 
 use vars qw($VERSION @ISA);
-$VERSION = sprintf('%d.%02d', q$Revision: 1.7 $ =~ /(\d+)/g);
+$VERSION = sprintf('%d.%02d', q$Revision: 1.8 $ =~ /(\d+)/g);
 
 sub new {
 	ref(my $class = shift) && croak 'Class name required';
@@ -24,13 +24,11 @@ sub new {
                 }
         }
 
-	#$self->{public_host} ||= 'http://www.dilbert.com';
-	#$self->{members_host} ||= 'https://members.comics.com';
-	#$self->{default_ext} ||= 'gif';
-
 	$self->{public_host} ||= 'http://www.comics.com/comics/dilbert';
 	$self->{members_host} ||= 'http://members.comics.com';
-	$self->{default_ext} ||= 'jpg';
+	$self->{default_ext} ||= [ 'gif', 'jpg', 'jpeg' ];
+	$self->{ext_pattern} ||= '(?:jpe?g|gif)';
+	$self->{user_agent} ||= 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)';
 
         bless($self,$class);
         return $self;
@@ -90,8 +88,8 @@ sub delete_strip_from_database {
 
 sub get_strip_from_filename {
 	my $self = shift;
-
 	my $filename = shift;
+
 	if (open(FH,$filename)) {
 		binmode(FH);
 		my $strip_blob = do { local( $/ ) ; <FH> } ;
@@ -112,92 +110,192 @@ sub get_strip_from_filename {
 
 sub get_todays_strip_from_website {
 	my $self = shift;
-	my $strip = $self->get_strip_from_website($self->_get_todays_strip_url());
+
+	my $strip_url = $self->get_todays_strip_url();
+	return undef unless $strip_url;
+	my $strip = $self->get_strip_from_website($strip_url);
+	return undef unless $strip;
+
 	return $strip;
 }
 
 sub get_strip_from_website {
 	my $self = shift;
+
+	# Check we have the right paramaters
 	my $param;
 	if (@_ > 1) {
 		$param = { @_ };
 	} else {
 		$param->{strip_url} = shift || undef;
 	}
+
+	# We need a strip URL or a login, password and date for the members access
 	unless ($param->{strip_url} || ($param->{email} && $param->{password} && $param->{date}) ) {
 		return undef;
 	}
+
+	# Die if we have been passed bad paramaters
         while (my ($k,$v) = each %{$param}) {
                 unless (grep(/^$k$/i, qw(strip_url email password public members date))) {
                         croak "Unrecognised paramater '$k'";
                 }
         }
+
+	# Check we have a sensible URL - return undef if we don't
 	if (exists $param->{strip_url} && $param->{strip_url} !~ /^http/i) {
-		$param->{strip_url} = sprintf('%s/comics/dilbert/archive/images/dilbert%s.%s',
-					$self->{public_host}, $param->{strip_url}, $self->{default_ext});
+		$param->{strip_url} = $self->_convertStripId2URL($param->{strip_url});
+		if ($param->{strip_url} !~ /^http/i) {
+			croak "Unable to convert '$param->{strip_url}' to a valid strip URL";
+		}
 	}
 
 	my $strip_blob = undef;
+
+	# Login and get the strip URL if we have been given member credentials
 	if ($param->{email} && $param->{password} && $param->{date}) {
-		my $mech = WWW::Mechanize->new(
-					quiet => 1,
-					autocheck => 1,
-					agent => 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)'
-				);
-		$mech->quiet(1);
-		$mech->agent_alias('Windows IE 6');
-		$mech->redirect_ok();
-
-		$mech->get(sprintf('%s/members/registration/showLogin.do',$self->{members_host}));
-		my $html = $mech->content;
-		$html =~ s|</form>|<input type="text" name="MailAction" value="SIGNIN"></form>|isg;
-		$mech->update_html($html);
-		# $self->_debug_content($mech);
-
-		$mech->form_name('userForm');
-		$mech->field('email', $param->{email});
-		$mech->field('password', $param->{password});
-		$mech->field('MailAction', 'SIGNIN');
-		$mech->click('sign in',1,1); # "sign in=SIGNIN"
-		$self->_debug_content($mech);
-
-		$mech->follow_link(text_regex => qr/click here to reload/i);
-		$self->_debug_content($mech);
-
-		sleep 5;
-		my $target_source = sprintf('%s/members/archive/viewStrip.do?date=%s&comicId=107&comic=dilbert', $self->{members_host}, $param->{date});
-		warn "\n\n\$target_source = '$target_source'\n\n";
-		$html = $mech->content;
-		$html =~ s|</form>|<a href="$target_source">Previous Day</a>></form>|isg;
-		$mech->update_html($html);
-		$mech->follow_link(url_regex => qr/viewStrip.do\?date=/i);
-		$self->_debug_content($mech);
-
-		($param->{strip_url}) = $mech->content =~ m!(?:
-								(/members/extra/archiveViewer\?stripId=[0-9]{4,})
-								|
-								((?:(?:/comics)?/dilbert)?/archive/images/dilbert[0-9]{10,14}\.$self->{default_ext})
-							)!isx;
-		if ($param->{strip_url}) {		
-			$param->{strip_url} = sprintf('%s%s', ($param->{strip_url} =~ /archiveViewer/i ? $self->{members_host} : $self->{public_host}), $param->{strip_url});
-			warn "\n\n\$param->{strip_url} = $param->{strip_url}\n\n";
-			$strip_blob = $mech->follow_link(url => $param->{strip_url});
-		}
-		$mech->get(sprintf('%s/members/registration/logout.do',$self->{members_host}));
+		$self->_get_members_only_strip(
+						email => $param->{email},
+						password => $param->{password},
+						date => $param->{date}
+					);
 	}
 
+	# Go and download the image strip
 	$self->{strip_url} = $param->{strip_url};
 	if ($param->{strip_url}) {
-		$strip_blob ||= LWP::Simple::get($param->{strip_url});
-		my $strip = WWW::Dilbert::Strip->_new(
+		my $ua = $self->_initUserAgent($self->{user_agent});
+		my $response = $ua->get($param->{strip_url});
+		if ($response->is_success) {
+			$strip_blob = $response->content;
+			my $strip = WWW::Dilbert::Strip->_new(
 					dilbert => $self,
 					strip_blob => $strip_blob,
 					strip_id => _filename2strip_id($param->{strip_url})
 				);
-		return $strip;
+			return $strip;
+		} else {
+			croak "Failed to download strip URL";
+		}
 	}
 
 	return undef;
+}
+
+sub get_todays_strip_url {
+	my $self = shift;
+
+	my $ua = $self->_initUserAgent($self->{user_agent});
+	my $response = $ua->get($self->{public_host});
+	if ($response->is_success) {
+		my $html = $response->content();
+		(my $strip_uri) = $html =~ m|SRC="(/comics/dilbert/archive/images/dilbert[0-9]{8,14}\.(gif\|jpe?g\|png))"|i;
+		return undef unless $strip_uri;
+		return sprintf('%s%s',$self->{public_host},$strip_uri);
+	} else {
+		croak "Failed to download source HTML to determine today's strip URL";
+	}
+
+	return undef;
+}
+
+
+
+
+
+###############################################################
+# Private methods
+
+sub _convertStripId2URL {
+	my $self = shift;
+	my $strip_url = shift || undef;
+	my $ua = $self->_initUserAgent($self->{user_agent});
+
+	# Check filenames based on all of the default file extensions possible
+	for my $file_ext (@{$self->{default_ext}}) {
+		# Build the possible URL
+		my $url = sprintf('%s/comics/dilbert/archive/images/dilbert%s.%s', $self->{public_host}, $strip_url, $file_ext);
+
+		# Test if the file exists
+		my $response = $ua->head($url);
+		if ( $response->is_success && $response->header('Content-length') > 10 &&
+			($response->header('Content-type') =~ m|^image/$file_ext$| || 
+				($response->header('Content-type') =~ m|^image/jpe?g$| && $file_ext =~ m|^jpe?g$|) ) ) {
+			$strip_url = $url;
+			last;
+		}
+	}
+
+	return $strip_url;
+}
+
+sub _get_members_only_strip {
+	my $self = shift;
+	my $param = { @_ };
+
+	my $mech = WWW::Mechanize->new(
+				quiet => 1,
+				autocheck => 1,
+				agent => $self->{user_agent},
+			);
+	$mech->quiet(1);
+	$mech->agent_alias('Windows IE 6');
+	$mech->redirect_ok();
+
+	my $strip_blob = undef;
+
+	$mech->get(sprintf('%s/members/registration/showLogin.do',$self->{members_host}));
+	my $html = $mech->content;
+	$html =~ s|</form>|<input type="text" name="MailAction" value="SIGNIN"></form>|isg;
+	$mech->update_html($html);
+	# $self->_debug_content($mech);
+
+	$mech->form_name('userForm');
+	$mech->field('email', $param->{email});
+	$mech->field('password', $param->{password});
+	$mech->field('MailAction', 'SIGNIN');
+	$mech->click('sign in',1,1); # "sign in=SIGNIN"
+	$self->_debug_content($mech);
+
+	$mech->follow_link(text_regex => qr/click here to reload/i);
+	$self->_debug_content($mech);
+
+	sleep 5;
+	my $target_source = sprintf('%s/members/archive/viewStrip.do?date=%s&comicId=107&comic=dilbert', $self->{members_host}, $param->{date});
+	warn "\n\n\$target_source = '$target_source'\n\n";
+	$html = $mech->content;
+	$html =~ s|</form>|<a href="$target_source">Previous Day</a>></form>|isg;
+	$mech->update_html($html);
+	$mech->follow_link(url_regex => qr/viewStrip.do\?date=/i);
+	$self->_debug_content($mech);
+
+	($param->{strip_url}) = $mech->content =~ m!(?:
+						(/members/extra/archiveViewer\?stripId=[0-9]{4,})
+						|
+						((?:(?:/comics)?/dilbert)?/archive/images/dilbert[0-9]{10,14}\.$self->{default_ext})
+					)!isx;
+	if ($param->{strip_url}) {		
+		$param->{strip_url} = sprintf('%s%s', ($param->{strip_url} =~ /archiveViewer/i ? $self->{members_host} : $self->{public_host}), $param->{strip_url});
+		warn "\n\n\$param->{strip_url} = $param->{strip_url}\n\n";
+		$strip_blob = $mech->follow_link(url => $param->{strip_url});
+	}
+	$mech->get(sprintf('%s/members/registration/logout.do',$self->{members_host}));
+
+	return $strip_blob;
+}
+
+sub _initUserAgent {
+	my $self = shift;
+	my $user_agent = shift || $self->{user_agent};
+
+	my $ua = LWP::UserAgent->new(
+				agent => $user_agent,
+				timeout => 5,
+				parse_head => 1,
+			);
+	$ua->timeout(5);
+	$ua->env_proxy;
+	return $ua;
 }
 
 sub _debug_content {
@@ -221,14 +319,6 @@ sub _filename2strip_id {
 	return $strip_id;
 }
 
-sub _get_todays_strip_url {
-	my $self = shift;
-	my $html = LWP::Simple::get($self->{public_host});
-	(my $strip_uri) = $html =~ m|SRC="(/comics/dilbert/archive/images/dilbert[0-9]{8,14}\.(gif\|jpe?g\|png))"|i;
-	return undef unless $strip_uri;
-	return sprintf('%s%s',$self->{public_host},$strip_uri);
-}
-
 sub _connect_to_database {
 	my $self = shift;
 	croak('You have not specified dbi_dsn, dbi_user or dbi_pass; unable to perform database action') unless ($self->{dbi_dsn} && $self->{dbi_user} && $self->{dbi_pass});
@@ -246,6 +336,12 @@ sub _is_valid_strip_id {
 	return $strip_name =~ /^[0-9]{10,14}$/;
 }
 
+
+
+
+#####################################################
+# Special methods
+
 sub DESTROY {
 	my $self = shift;
 	$self->{dbh}->disconnect() if exists $self->{dbh};
@@ -253,6 +349,10 @@ sub DESTROY {
 
 1;
 
+
+
+
+##########################################################
 
 package WWW::Dilbert::Strip;
 
@@ -330,6 +430,10 @@ sub write_to_file {
 1;
 
 
+
+
+
+
 =pod
 
 =head1 NAME
@@ -397,6 +501,8 @@ Returns a strip object containing a specific Dilbert cartoon strip as downloaded
 Returns a strip object containing a specific Dilbert cartoon strip from a Dilbert comic stip file on disk.
 
 =item get_strip_from_database($strip_id)
+
+=item get_todays_strip_url()
 
 =item get_random_strip_from_database()
 
