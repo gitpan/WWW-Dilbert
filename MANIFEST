@@ -1,0 +1,17 @@
+TODO
+t/00compile.t
+t/01methods.t
+t/02fail.t
+examples/random_image.cgi
+examples/insert_dotd_in_database.pl
+examples/get_specific_strip.pl
+examples/import_from_filesystem.pl
+examples/read_strip_from_database.pl
+lib/WWW/Dilbert.pm
+README
+Changes
+MANIFEST
+INSTALL
+Makefile.PL
+COPYING
+META.yml
