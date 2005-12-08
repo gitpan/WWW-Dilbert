@@ -1,4 +1,5 @@
 package WWW::Dilbert;
+# vim:ts=4:sw=4:tw=78
 
 use strict;
 use warnings;
@@ -10,25 +11,27 @@ use WWW::Mechanize ();
 use Carp qw(croak cluck confess);
 
 use vars qw($VERSION @ISA);
-$VERSION = sprintf('%d.%02d', q$Revision: 1.8 $ =~ /(\d+)/g);
+$VERSION = sprintf('%d.%02d', q$Revision: 1.9 $ =~ /(\d+)/g);
 
 sub new {
 	ref(my $class = shift) && croak 'Class name required';
 
-        croak 'Odd number of elements passed when even number was expected' if @_ % 2;
-        my $self = { @_ };
+	croak 'Odd number of elements passed when even number was expected' if @_ % 2;
+	my $self = { @_ };
 
-        while (my ($k,$v) = each %{$self}) {
-                unless (grep(/^$k$/i, qw(dbi_dsn dbi_user dbi_pass))) {
-                        croak "Unrecognised paramater '$k' passed to module $class";
-                }
-        }
+	while (my ($k,$v) = each %{$self}) {
+		unless (grep(/^$k$/i, qw(dbi_dsn dbi_user dbi_pass))) {
+			croak "Unrecognised paramater '$k' passed to module $class";
+		}
+	}
 
 	$self->{public_host} ||= 'http://www.comics.com/comics/dilbert';
 	$self->{members_host} ||= 'http://members.comics.com';
 	$self->{default_ext} ||= [ 'gif', 'jpg', 'jpeg' ];
 	$self->{ext_pattern} ||= '(?:jpe?g|gif)';
 	$self->{user_agent} ||= 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)';
+	$self->{retry} ||= 3;
+	$self->{tried} ||= 0;
 
         bless($self,$class);
         return $self;
@@ -113,6 +116,7 @@ sub get_todays_strip_from_website {
 
 	my $strip_url = $self->get_todays_strip_url();
 	return undef unless $strip_url;
+
 	my $strip = $self->get_strip_from_website($strip_url);
 	return undef unless $strip;
 
@@ -120,6 +124,33 @@ sub get_todays_strip_from_website {
 }
 
 sub get_strip_from_website {
+	my $strip;
+	while ($self->{tried} < $self->{retry}+1 && !$strip_url) {
+		evla { $strip = $self->get_strip_from_website($strip_url); };
+		$self->{tried}++;
+	}
+	return undef unless $strip;
+}
+
+sub get_todays_strip_url {
+	my $strip_url;
+	while ($self->{tried} < $self->{retry}+1 && !$strip_url) {
+		eval { $strip_url = $self->get_todays_strip_url(); };
+		$self->{tried}++;
+	}
+	return undef unless $strip_url;
+}
+
+sub _convertStripId2URL {
+	my $strip_url;
+	while ($self->{tried} < $self->{retry}+1 && !$strip_url) {
+		eval { $strip_url = $self->get_todays_strip_url(); };
+		$self->{tried}++;
+	}
+	return undef unless $strip_url;
+}
+
+sub _get_strip_from_website {
 	my $self = shift;
 
 	# Check we have the right paramaters
@@ -182,7 +213,7 @@ sub get_strip_from_website {
 	return undef;
 }
 
-sub get_todays_strip_url {
+sub _get_todays_strip_url {
 	my $self = shift;
 
 	my $ua = $self->_initUserAgent($self->{user_agent});
@@ -206,7 +237,7 @@ sub get_todays_strip_url {
 ###############################################################
 # Private methods
 
-sub _convertStripId2URL {
+sub __convertStripId2URL {
 	my $self = shift;
 	my $strip_url = shift || undef;
 	my $ua = $self->_initUserAgent($self->{user_agent});
@@ -292,6 +323,7 @@ sub _initUserAgent {
 				agent => $user_agent,
 				timeout => 5,
 				parse_head => 1,
+#				from => $self->{public_host},
 			);
 	$ua->timeout(5);
 	$ua->env_proxy;
@@ -440,10 +472,6 @@ sub write_to_file {
 
 WWW::Dilbert - Dilbert of the day comic strip archive and retieval module
 
-=head1 VERSION
-
-$VERSON
-
 =head1 SYNOPSYS
 
  use WWW::Dilbert;
@@ -575,47 +603,34 @@ Returns the comic strip id.
  	primary key (dilbert_character_id, dilbert_strip_id)
  );
  
-=head1 SEE ALSO
-
-Dev::Bollocks
-
 =head1 TODO
 
-Complete the database search facility, and add retrieval of strips from the
-last 30 day online archive.
+Remove the database functionality since it's pretty pointless.
 
-=head1 BUGS
+Add retrieval of strips from the last 30 day online archive.
 
-Probably.
+=head1 VERSION
 
-=head1 LICENSE
+$Id: Dilbert.pm,v 1.9 2005/12/08 15:48:09 nicolaw Exp $
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+=head1 AUTHOR
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+Nicola Worthington <nicolaw@cpan.org>
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+http://perlgirl.org.uk
 
-=head1 CREDITS
+=head1 ACKNOWLEDGEMENTS
 
 Thanks go to David Dick <david_dick@iprimus.com.au> for the write_file() patch
 which he submitted on 22nd September 2004.
 
-=head1 AUTHOR
+=head1 COPYRIGHT
 
-Nicola Worthington <nicolaworthington@msn.com>
+(c) Nicola Worthington 2004, 2005. This program is free software; you can
+redistribute it and/or modify it under the GNU GPL.
 
-Copyright (C) 2004 Nicola Worthington.
-
-http://www.nicolaworthington.com
+See the file COPYING in this distribution, or
+http://www.gnu.org/licenses/gpl.txt 
 
 =cut
 
