@@ -1,3 +1,8 @@
+Version 1.16 - 30th December 2005
+    + Forgot to add the unit test files to the
+      MANIFEST. Added them now so they get shipped
+      in the distrobution.
+
 Version 1.15 - 30th December 2005
     + Only output warning about invalid image format
       if perl warnings are enabled.

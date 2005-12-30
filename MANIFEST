@@ -1,4 +1,6 @@
 TODO
+t/00compile.t
+t/01basic.t
 lib/WWW/Dilbert.pm
 README
 Changes
