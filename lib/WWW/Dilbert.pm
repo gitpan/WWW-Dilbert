@@ -1,23 +1,22 @@
 ############################################################
-# $Id: Dilbert.pm,v 1.12 2005/12/29 21:41:59 nicolaw Exp $
-# WWW::Dilbert - Retrieve Dilbert of the day comic strip images
-# Copyright: (c)2005 Nicola Worthington. All rights reserved.
-############################################################
-# This file is part of WWW::Dilbert.
 #
-# WWW::Dilbert is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
+#   $Id: Dilbert.pm,v 1.15 2005/12/30 16:27:47 nicolaw Exp $
+#   WWW::Dilbert - Retrieve Dilbert of the day comic strip images
 #
-# WWW::Dilbert is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+#   Copyright 2004,2005 Nicola Worthington
 #
-# You should have received a copy of the GNU General Public License
-# along with WWW::Dilbert; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
 ############################################################
 
 package WWW::Dilbert;
@@ -26,10 +25,11 @@ package WWW::Dilbert;
 use strict;
 use Exporter;
 use LWP::UserAgent qw();
+use HTTP::Request qw();
 use Carp qw(carp croak);
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
-$VERSION     = sprintf('%d.%02d', q$Revision: 1.12 $ =~ /(\d+)/g);
+$VERSION     = sprintf('%d.%02d', q$Revision: 1.15 $ =~ /(\d+)/g);
 @ISA         = qw(Exporter);
 @EXPORT      = ();
 @EXPORT_OK   = qw(&get_strip &strip_url &mirror_strip);
@@ -38,13 +38,16 @@ $VERSION     = sprintf('%d.%02d', q$Revision: 1.12 $ =~ /(\d+)/g);
 sub mirror_strip {
 	my $filename = shift;
 	my $url = shift || strip_url();
+
 	my $blob = get_strip($url);
 	return undef if !defined($blob);
+
 	if ((!defined($filename) || !length($filename)) && defined($url)) {
 		($filename = $url) =~ s#.*/##;
 	}
 	my $ext = _image_format($blob);
 	$filename =~ s/(\.(jpe?g|gif))?$/.$ext/i;
+
 	open(FH,">$filename") ||
 		croak "Unable to open file handle FH for file '$filename': $!";
 	binmode FH;
@@ -55,23 +58,31 @@ sub mirror_strip {
 }
 
 sub get_strip {
-	my $url = shift || strip_url();
+	my $url = shift || strip_url() || '';
+
 	if ($url =~ /^(?:dilbert)?(\d+(\.(jpg|gif))?)$/i) {
 		$url = "http://www.dilbert.com/comics/dilbert/".
 					"archive/images/dilbert$1";
 		$url .= '.gif' unless $url =~ /\.(jpg|gif)$/i;
 	}
+
 	my $ua = _new_agent();
-	my $response = $ua->get($url);
+	my $req = HTTP::Request->new(GET => $url); 
+	$req->referer('http://www.dilbert.com/');
+	my $response = $ua->request($req);
+
 	my $status;
 	unless ($response->is_success) {
 		$status = $response->status_line;
 		unless ($url =~ s/\.gif$/.jpg/i) { $url =~ s/\.jpg$/.gif/i; }
-		$response = $ua->get($url);
+		$req = HTTP::Request->new(GET => $url); 
+		$req->referer('http://www.dilbert.com/');
+		$response = $ua->request($req);
 	}
+
 	if ($response->is_success) {
 		unless (_image_format($response->content)) {
-			carp('Unrecognised image format');
+			carp('Unrecognised image format') if $^W;
 			return undef;
 		}
 		return $response->content;
@@ -83,6 +94,7 @@ sub get_strip {
 
 sub strip_url {
 	my $ua = _new_agent();
+
 	my $response = $ua->get('http://www.dilbert.com');
 	if ($response->is_success) {
 		my $html = $response->content;
@@ -92,9 +104,11 @@ sub strip_url {
 			$url = "http://www.dilbert.com$1" unless $url =~ /^https?:\/\//i;
 			return $url;
 		}
+
 	} elsif ($^W) {
 		carp($response->status_line);
 	}
+
 	return undef;
 }
 
@@ -112,6 +126,8 @@ sub _new_agent {
 					'Gecko/20050718 Firefox/1.0.4 (Debian package 1.0.4-2sarge1)',
 			timeout => 20
 		);
+	$ua->env_proxy;
+	$ua->max_size(1024*250);
 	return $ua;
 }
 
@@ -151,7 +167,7 @@ write it to disk.
 
 =head1 VERSION
 
-$Id: Dilbert.pm,v 1.12 2005/12/29 21:41:59 nicolaw Exp $
+$Id: Dilbert.pm,v 1.15 2005/12/30 16:27:47 nicolaw Exp $
 
 =head1 AUTHOR
 
@@ -161,11 +177,11 @@ L<http://perlgirl.org.uk>
 
 =head1 COPYRIGHT
 
-(c) Nicola Worthington 2004, 2005. This program is free software; you can
-redistribute it and/or modify it under the GNU GPL.
+Copyright 2004,2005 Nicola Worthington.
 
-See the file COPYING in this distribution, or
-L<http://www.gnu.org/licenses/gpl.txt>
+This software is licensed under The Apache Software License, Version 2.0.
+
+L<http://www.apache.org/licenses/LICENSE-2.0>
 
 =cut
 

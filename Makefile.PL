@@ -17,6 +17,7 @@ WriteMakefile(
 		AUTHOR        => 'Nicola Worthington <nicolaw@cpan.org>',
 		PREREQ_PM     => {
 				'LWP::Simple' => 0,
+				'HTTP::Request' => 0,
 				'Carp'        => 0,
 			},
 	);

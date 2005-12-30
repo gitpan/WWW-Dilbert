@@ -6,5 +6,6 @@ old/WWW-Dilbert-1.09.tar.gz
 MANIFEST
 INSTALL
 Makefile.PL
-COPYING
+LICENSE
+NOTICE
 META.yml
