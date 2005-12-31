@@ -1,6 +1,6 @@
 ############################################################
 #
-#   $Id: Dilbert.pm,v 1.16 2005/12/30 16:58:34 nicolaw Exp $
+#   $Id: Dilbert.pm,v 1.17 2005/12/31 15:34:50 nicolaw Exp $
 #   WWW::Dilbert - Retrieve Dilbert of the day comic strip images
 #
 #   Copyright 2004,2005 Nicola Worthington
@@ -29,7 +29,7 @@ use HTTP::Request qw();
 use Carp qw(carp croak);
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
-$VERSION     = sprintf('%d.%02d', q$Revision: 1.16 $ =~ /(\d+)/g);
+$VERSION     = sprintf('%d.%02d', q$Revision: 1.17 $ =~ /(\d+)/g);
 @ISA         = qw(Exporter);
 @EXPORT      = ();
 @EXPORT_OK   = qw(&get_strip &strip_url &mirror_strip);
@@ -139,7 +139,7 @@ sub _new_agent {
 
 WWW::Dilbert - Retrieve Dilbert of the day comic strip images
 
-=head1 SYNOPSYS
+=head1 SYNOPSIS
 
  use WWW::Dilbert qw(get_strip mirror_strip strip_url);
  
@@ -166,7 +166,7 @@ write it to disk.
 
 =head1 VERSION
 
-$Id: Dilbert.pm,v 1.16 2005/12/30 16:58:34 nicolaw Exp $
+$Id: Dilbert.pm,v 1.17 2005/12/31 15:34:50 nicolaw Exp $
 
 =head1 AUTHOR
 

@@ -1,3 +1,5 @@
+examples/dilbert_strip_ids.txt
+examples/getComics.pl
 TODO
 t/00compile.t
 t/01basic.t

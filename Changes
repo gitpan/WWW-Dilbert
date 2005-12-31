@@ -1,3 +1,9 @@
+Version 1.17 - 31st December 2005
+    + Typoed SYNOPSYS in the POD.
+
+    + Added more stuff in to the examples/
+      directory in the distribution tarball.
+
 Version 1.16 - 30th December 2005
     + Forgot to add the unit test files to the
       MANIFEST. Added them now so they get shipped
