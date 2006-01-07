@@ -1,3 +1,7 @@
+Version 1.18 - 7th January 2006
+    + Added Test::Pod and Test::Pod::Coverage
+      unit tests
+
 Version 1.17 - 31st December 2005
     + Typoed SYNOPSYS in the POD.
 

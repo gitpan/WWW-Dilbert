@@ -13,3 +13,5 @@ Makefile.PL
 LICENSE
 NOTICE
 META.yml
+t/02pod_coverage.t
+t/01pod.t
