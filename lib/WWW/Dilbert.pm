@@ -1,6 +1,6 @@
 ############################################################
 #
-#   $Id: Dilbert.pm,v 1.18 2006/01/07 12:19:07 nicolaw Exp $
+#   $Id: Dilbert.pm,v 1.19 2006/01/12 22:30:11 nicolaw Exp $
 #   WWW::Dilbert - Retrieve Dilbert of the day comic strip images
 #
 #   Copyright 2004,2005,2006 Nicola Worthington
@@ -29,7 +29,7 @@ use HTTP::Request qw();
 use Carp qw(carp croak);
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
 
-$VERSION     = sprintf('%d.%02d', q$Revision: 1.18 $ =~ /(\d+)/g);
+$VERSION     = 1.19 || sprintf('%d.%02d', q$Revision$ =~ /(\d+)/g);
 @ISA         = qw(Exporter);
 @EXPORT      = ();
 @EXPORT_OK   = qw(&get_strip &strip_url &mirror_strip);
@@ -164,9 +164,42 @@ This module will download the latest Dilbert of the Day cartoon strip
 from the Dilbert website and return a binary blob of the image, or
 write it to disk. 
 
+=head1 EXPORTS
+
+The following functions can be exported with the C<:all> export
+tag, or individually as is show in the above example.
+
+=head2 strip_url
+
+ # Return todays strip URL
+ my $url = strip_url();
+
+ # Return the strip matching ID 200512287225
+ $url = strip_url("200512287225");
+
+Accepts an optional argument strip ID argument.
+
+=head2 get_strip
+
+ # Get todays comic strip image
+ my $image_blob = get_strip();
+
+Accepts an optional argument strip ID argument.
+
+=head2 mirror_strip
+
+ # Write todays comic strip to "mystrip.gif" on disk
+ my $filename_written = mirror_strip("mystrip.gif");
+
+Accepts two optional arguments. The first is the filename that
+the comic strip should be written to on disk. The second specifies
+the strip ID.
+
+Returns the name of the file that was written to disk.
+
 =head1 VERSION
 
-$Id: Dilbert.pm,v 1.18 2006/01/07 12:19:07 nicolaw Exp $
+$Id: Dilbert.pm,v 1.19 2006/01/12 22:30:11 nicolaw Exp $
 
 =head1 AUTHOR
 

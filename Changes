@@ -1,3 +1,13 @@
+Version 1.19 - 19th February 2006
+    + Added EXPORTS section to POD
+
+    + Fixed unit test to run Test::Pod::Coverage
+      code instead of the Test::Pod module which
+      was what it was incorrectly running before
+
+    + Changed to build with Module::Build from
+      svn instead of cvs repository
+
 Version 1.18 - 7th January 2006
     + Added Test::Pod and Test::Pod::Coverage
       unit tests

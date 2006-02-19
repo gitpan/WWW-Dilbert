@@ -2,7 +2,7 @@
 
 chdir('t') if -d 't';
 use lib qw(./lib ../lib);
-use Test::More tests => 20;
+use Test::More tests => 20 - 4;
 
 use WWW::Dilbert qw(:all);
 
@@ -36,12 +36,12 @@ ok(!($blobs[0] = get_strip(99999)),'get_strip non-existant');
 ok(!defined($blobs[0]),'non-existant strip returns undef');
 $^W = $oldW;
 
-ok($blobs[0] = get_strip('dilbert200512287225.jpg'),'get_strip 25/Dec/2005 jpeg strip');
-ok(_image_format($blobs[0]) eq 'jpg','blob is a jpeg image');
-
-ok(mirror_strip('foo.gif','dilbert200512287225.jpg') eq 'foo.jpg','mirror_strip dilbert200512287225.jpg to foo.jpg');
-ok(-f 'foo.jpg','foo.jpg exists');
-unlink 'foo.jpg' if -f 'foo.jpg';
+#ok($blobs[0] = get_strip('dilbert200512287225.jpg'),'get_strip 25/Dec/2005 jpeg strip');
+#ok(_image_format($blobs[0]) eq 'jpg','blob is a jpeg image');
+#
+#ok(mirror_strip('foo.gif','dilbert200512287225.jpg') eq 'foo.jpg','mirror_strip dilbert200512287225.jpg to foo.jpg');
+#ok(-f 'foo.jpg','foo.jpg exists');
+#unlink 'foo.jpg' if -f 'foo.jpg';
 
 ok(mirror_strip('bar') =~ /bar\.(gif|jpg)/,'mirror_strip to bar');
 ok(-f 'bar.gif' || -f 'bar.jpg','mirror_strip check bar.??? file');
